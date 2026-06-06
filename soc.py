@@ -8,7 +8,12 @@
 from vs.abstract_agent import AbstAgent
 from vs.constants import VS
 from map import Map
+import os
 
+from sklearn.cluster import DBSCAN
+import numpy as _np
+
+from collections import defaultdict, Counter
 
 ## Classe que define o Agente Rescuer com um plano fixo
 class Rescuer(AbstAgent):
@@ -97,9 +102,64 @@ class Rescuer(AbstAgent):
         ##################
         ### CLUSTERING ###
         ##################
-        # O agente socorrista mestre faz o clustering
+        # Build a victims list with coordinates and triage label
+        env = self.get_env()
+        victims_list = []  # tuples: (seq, x, y, tri)
+        for seq, data in self.victims.items():
+            coord, _vs = data
+            x, y = coord
+            tri = env.tri[seq]
+            victims_list.append((seq, float(x), float(y), int(tri)))
+
         clusters = []
-        
+
+        if len(victims_list) == 0:
+            print(f"{self.NAME}: No victims to cluster")
+        else:
+            # Build feature vectors: x, y and scaled tri to influence clustering
+            coords = _np.array([[v[1], v[2]] for v in victims_list])
+            tris = _np.array([v[3] for v in victims_list]).reshape(-1, 1)
+
+            # Scale tri so it has comparable range to coordinates
+            grid_scale = max(env.dic.get("GRID_WIDTH", 1), env.dic.get("GRID_HEIGHT", 1))
+            tri_scale = float(grid_scale) * 0.5
+            features = _np.hstack([coords, tris * tri_scale])
+
+            # eps chosen as a small fraction of grid diagonal
+            diag = (_np.sqrt(grid_scale ** 2 + grid_scale ** 2))
+            eps = max(1.0, diag * 0.05)
+
+            labels = DBSCAN(eps=eps, min_samples=1).fit_predict(features)
+
+            groups = defaultdict(list)
+            for (v, x, y, tri), lbl in zip(victims_list, labels):
+                groups[int(lbl)].append((v, x, y, tri))
+
+            for lbl, members in groups.items():
+                # compute centroid and cluster tri (max severity)
+                xs = [m[1] for m in members]
+                ys = [m[2] for m in members]
+                tris_m = [m[3] for m in members]
+                centroid = (sum(xs) / len(xs), sum(ys) / len(ys))
+                cluster_tri = max(tris_m)
+                cluster_seqs = [m[0] for m in members]
+                clusters.append({
+                    'members': cluster_seqs,
+                    'centroid': centroid,
+                    'tri': int(cluster_tri)
+                })
+
+            print(f"{self.NAME}: Created {len(clusters)} clusters using DBSCAN")
+
+        # Write each cluster members to a file cluster_i.txt in the agent config folder
+        for i, cl in enumerate(clusters):
+            fname = os.path.join(self.config_folder, f"clusters/cluster_{i}.txt")
+            with open(fname, 'w') as fh:
+                for seq in cl.get('members', []):
+                    fh.write(f"{seq}\n")
+        if clusters:
+            print(f"{self.NAME}: Wrote {len(clusters)} cluster files to {self.config_folder}")
+
         #####################
         ### SEND CLUSTERS ###
         #####################
