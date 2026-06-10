@@ -1,8 +1,14 @@
 import os
 import csv
 
+from sklearn.cluster import DBSCAN
+import numpy as _np
+
+from collections import defaultdict
+
 def main(map_file):
     victims_list = []
+    clusters = []
 
     with open(map_file, 'r') as csvfile:
         csvreader = csv.reader(csvfile)
@@ -31,8 +37,48 @@ def main(map_file):
             if id != -1:
                 victims_list.append((id, x, y, tri))
 
-    for victim in victims_list:
-        print(f"ID: {victim[0]}, Coordenadas: ({victim[1]}, {victim[2]}), Triagem: {victim[3]}")
+    coords = _np.array([[v[1], v[2]] for v in victims_list])
+    tris = _np.array([v[3] for v in victims_list]).reshape(-1, 1)
+
+    # Scale tri so it has comparable range to coordinates
+    grid_scale = 94
+    tri_scale = float(grid_scale) * 0.1
+    features = _np.hstack([coords, tris * tri_scale])
+
+    # eps chosen as a small fraction of grid diagonal
+    diag = (_np.sqrt(grid_scale ** 2 + grid_scale ** 2))
+    eps = max(1.0, diag * 0.05)
+
+    labels = DBSCAN(eps=eps, min_samples=1).fit_predict(features)
+
+    groups = defaultdict(list)
+    for (v, x, y, tri), lbl in zip(victims_list, labels):
+        groups[int(lbl)].append((v, x, y, tri))
+
+    for lbl, members in groups.items():
+        # compute centroid and cluster tri (max severity)
+        xs = [m[1] for m in members]
+        ys = [m[2] for m in members]
+        tris_m = [m[3] for m in members]
+        centroid = (sum(xs) / len(xs), sum(ys) / len(ys))
+        cluster_tri = max(tris_m)
+        cluster_seqs = [m[0] for m in members]
+        clusters.append({
+            'members': cluster_seqs,
+            'centroid': centroid,
+            'tri': int(cluster_tri)
+        })
+
+    print(f"Created {len(clusters)} clusters using DBSCAN")
+
+    # Write each cluster members to a file cluster_i.txt in the agent config folder
+    for i, cl in enumerate(clusters):
+        fname = os.path.join(".", f"clusters/cluster_{i}.txt")
+        with open(fname, 'w') as fh:
+            for seq in cl.get('members', []):
+                fh.write(f"{seq}\n")
+    if clusters:
+        print(f"Wrote {len(clusters)} cluster files to clusters/ directory")
 
 
 if __name__ == '__main__':
