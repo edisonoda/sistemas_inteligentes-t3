@@ -58,7 +58,7 @@ def main(map_file):
         print('\tNoise: ', n_noise, '| silhouette:', score)
 
         if best_params is None or score > best_params['score']:
-            best_params = {'params': params, 'score': score, 'n_clusters': n_clusters + 1, 'n_noise': n_noise, 'labels': labels}
+            best_params = {'params': params, 'score': score, 'n_clusters': n_clusters, 'n_noise': n_noise, 'labels': labels}
 
     labels = best_params['labels']
     best_params.pop('labels')
@@ -204,7 +204,7 @@ def main(map_file):
 
     # Calcula a silhueta média
     mean_silhouette = _np.mean(silhouette_scores)
-    print(f"\nEscore de silhueta média para {n_clusters} clusters: {mean_silhouette:.4f}")
+    print(f"\nEscore de silhueta média para {n_clusters + 1} clusters: {mean_silhouette:.4f}")
     faixa_boa = _np.sum(silhouette_scores >= 0.7)
     faixa_raz = _np.sum((silhouette_scores >= 0.25) & (silhouette_scores < 0.7))
     faixa_ruim = _np.sum(silhouette_scores < 0.25)
