@@ -1,15 +1,18 @@
 import os
 import csv
 
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN, KMeans
 import numpy as _np
 
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import silhouette_score
 
 def main(map_file):
     victims_list = []
     clusters = []
+    labels = []
+    best_params = None
 
     with open(map_file, 'r') as csvfile:
         csvreader = csv.reader(csvfile)
@@ -33,7 +36,32 @@ def main(map_file):
     scaler = MinMaxScaler()
     features = scaler.fit_transform(features_raw)
 
-    labels = DBSCAN(eps=0.2, min_samples=1).fit_predict(features)
+    parameters = [
+        {'eps': 0.2, 'min_samples': 1},
+        {'eps': 0.15, 'min_samples': 3},
+        {'eps': 0.25, 'min_samples': 5},
+    ]
+
+    for params in parameters:
+        labels = DBSCAN(**params).fit_predict(features)
+        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+        n_noise = list(labels).count(-1)
+        print(f"DBSCAN with eps={params['eps']} and min_samples={params['min_samples']} found {n_clusters} clusters")
+
+        if n_clusters > 1:
+            score = silhouette_score(features[labels != -1], labels[labels != -1])
+        else:
+            score = -1.0
+
+        print('\tNoise: ', n_noise, '| silhouette:', score)
+
+        if best_params is None or score > best_params['score']:
+            best_params = {'params': params, 'score': score, 'n_clusters': n_clusters, 'n_noise': n_noise, 'labels': labels}
+
+    labels = best_params['labels']
+    best_params.pop('labels')
+
+    print('Best params:', best_params)
 
     groups = defaultdict(list)
     for (v, x, y, tri, sobr), lbl in zip(victims_list, labels):
@@ -64,8 +92,6 @@ def main(map_file):
             'sobr_mean': float(sobr_mean),
             'sobr_std': float(sobr_std)
         })
-
-    print(f"Created {len(clusters)} clusters using DBSCAN")
 
     # Write each cluster members to a file cluster_i.txt in the agent config folder
     for i, cl in enumerate(clusters):
