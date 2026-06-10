@@ -8,6 +8,8 @@ from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import silhouette_score, pairwise_distances
 
+import matplotlib.pyplot as plt
+
 def main(map_file):
     victims_list = []
     clusters = []
@@ -46,7 +48,7 @@ def main(map_file):
         labels = DBSCAN(**params).fit_predict(features)
         n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
         n_noise = list(labels).count(-1)
-        print(f"DBSCAN with eps={params['eps']} and min_samples={params['min_samples']} found {n_clusters} clusters")
+        print(f"DBSCAN with eps={params['eps']} and min_samples={params['min_samples']} found {n_clusters + 1} clusters")
 
         if n_clusters > 1:
             score = silhouette_score(features, labels)
@@ -56,7 +58,7 @@ def main(map_file):
         print('\tNoise: ', n_noise, '| silhouette:', score)
 
         if best_params is None or score > best_params['score']:
-            best_params = {'params': params, 'score': score, 'n_clusters': n_clusters, 'n_noise': n_noise, 'labels': labels}
+            best_params = {'params': params, 'score': score, 'n_clusters': n_clusters + 1, 'n_noise': n_noise, 'labels': labels}
 
     labels = best_params['labels']
     best_params.pop('labels')
@@ -101,6 +103,68 @@ def main(map_file):
                 fh.write(f"{seq}\n")
     if clusters:
         print(f"Wrote {len(clusters)} cluster files to clusters/ directory")
+
+    # Plot victims colored by cluster
+    plt.figure(figsize=(12, 12))
+    plt.axis('equal')
+
+    plt.scatter(
+        0,
+        0,
+        marker='s',
+        s=200,
+        color='red',
+        label='Base'
+    )
+
+    unique_labels = set(labels)
+    for label in unique_labels:
+        mask = labels == label
+
+        if label == -1:
+            # Noise points
+            plt.scatter(
+                coords[mask, 0],
+                coords[mask, 1],
+                c='black',
+                marker='x',
+                s=30,
+                label='Noise'
+            )
+        else:
+            plt.scatter(
+                coords[mask, 0],
+                coords[mask, 1],
+                s=30,
+                label=f'Cluster {label}'
+            )
+
+    for i, cl in enumerate(clusters):
+        cx, cy = cl['centroid']
+
+        plt.scatter(
+            cx,
+            cy,
+            marker='*',
+            s=300,
+            edgecolors='black'
+        )
+
+        plt.text(
+            cx,
+            cy,
+            f'C{i+1}',
+            fontsize=10,
+            ha='center'
+        )
+
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('DBSCAN Victim Clusters')
+    plt.legend()
+    plt.grid(True)
+    plt.axis('equal')
+    plt.show()
     
     n_samples = features.shape[0]
     n_clusters = best_params['n_clusters']
@@ -134,9 +198,9 @@ def main(map_file):
     silhouette_scores = (b - a) / _np.maximum(a, b)
 
     # Print os coeficientes individuais de silhueta
-    # print(f"(x, y, tri): a\tb\t\tsilhouette")
-    # for i, txt in enumerate(features):
-    #     print(f"({features[i, 0]:.2f}, {features[i, 1]:.2f}, {features[i, 2]:.2f}): a = {a[i]:.2f}\tb = {b[i]:.2f}\ts = {silhouette_scores[i]:.3f}")
+    print(f"(x, y, tri): a\tb\t\tsilhouette")
+    for i, txt in enumerate(features):
+        print(f"({features[i, 0]:.2f}, {features[i, 1]:.2f}, {features[i, 2]:.2f}): a = {a[i]:.2f}\tb = {b[i]:.2f}\ts = {silhouette_scores[i]:.3f}")
 
     # Calcula a silhueta média
     mean_silhouette = _np.mean(silhouette_scores)
