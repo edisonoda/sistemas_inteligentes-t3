@@ -39,7 +39,8 @@ def main(map_file):
     features = scaler.fit_transform(features_raw)
 
     parameters = [
-        {'eps': 0.12, 'min_samples': 6},
+        {'eps': 0.1, 'min_samples': 6},
+        {'eps': 0.12, 'min_samples': 5},
         {'eps': 0.14, 'min_samples': 4},
         {'eps': 0.15, 'min_samples': 3},
     ]
@@ -47,18 +48,27 @@ def main(map_file):
     for params in parameters:
         labels = DBSCAN(**params).fit_predict(features)
         n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-        n_noise = list(labels).count(-1)
         print(f"DBSCAN with eps={params['eps']} and min_samples={params['min_samples']} found {n_clusters + 1} clusters")
 
         if n_clusters > 1:
-            score = silhouette_score(features, labels)
+            s_score = silhouette_score(features, labels)
         else:
-            score = -1.0
+            s_score = -1.0
 
-        print('\tNoise: ', n_noise, '| silhouette:', score)
+        n_noise = list(labels).count(-1)
+        coverage = (len(labels) - n_noise) / len(labels)
 
-        if best_params is None or score > best_params['score']:
-            best_params = {'params': params, 'score': score, 'n_clusters': n_clusters, 'n_noise': n_noise, 'labels': labels}
+        print('\tNoise: ', n_noise, '| coverage:', coverage, '| silhouette:', s_score)
+
+        if best_params is None or coverage > best_params['coverage']:
+            best_params = {
+                'params': params,
+                'coverage': coverage,
+                's_score': s_score,
+                'n_clusters': n_clusters,
+                'n_noise': n_noise,
+                'labels': labels
+            }
 
     labels = best_params['labels']
     best_params.pop('labels')
