@@ -58,7 +58,7 @@ def main(map_file):
         n_noise = list(labels).count(-1)
         coverage = (len(labels) - n_noise) / len(labels)
 
-        print('\tNoise: ', n_noise, '| coverage:', coverage, '| silhouette:', s_score)
+        print(f"\tNoise: {n_noise} | coverage: {coverage:.2f} | silhouette: {s_score:.2f}")
 
         if best_params is None or coverage > best_params['coverage']:
             best_params = {
@@ -105,12 +105,16 @@ def main(map_file):
             'sobr_std': float(sobr_std)
         })
 
+    print(f"\nCluster\t\tSobr (min)\tSobr (max)\tSobr (med)\tDesvio")
+
     # Write each cluster members to a file cluster_i.txt in the agent config folder
     for i, cl in enumerate(clusters):
+        print(f"Cluster {i}:\t{cl.get('sobr_min')}\t\t{cl.get('sobr_max')}\t\t{cl.get('sobr_mean'):.2f}\t\t{cl.get('sobr_std'):.2f}")
         fname = os.path.join(".", f"clusters/cluster_{i + 1}.txt")
         with open(fname, 'w') as fh:
             for seq in cl.get('members', []):
                 fh.write(f"{seq}\n")
+    
     if clusters:
         print(f"Wrote {len(clusters)} cluster files to clusters/ directory")
 
@@ -208,9 +212,9 @@ def main(map_file):
     silhouette_scores = (b - a) / _np.maximum(a, b)
 
     # Print os coeficientes individuais de silhueta
-    print(f"(x, y, tri): a\tb\t\tsilhouette")
+    print(f"\n(x, y, tri):\t\ta\t\tb\t\tsilhouette")
     for i, txt in enumerate(features):
-        print(f"({features[i, 0]:.2f}, {features[i, 1]:.2f}, {features[i, 2]:.2f}): a = {a[i]:.2f}\tb = {b[i]:.2f}\ts = {silhouette_scores[i]:.3f}")
+        print(f"({features[i, 0]:.2f}, {features[i, 1]:.2f}, {features[i, 2]:.2f}):\ta = {a[i]:.2f}\tb = {b[i]:.2f}\ts = {silhouette_scores[i]:.3f}")
 
     # Calcula a silhueta média
     mean_silhouette = _np.mean(silhouette_scores)
