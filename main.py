@@ -66,7 +66,7 @@ def params_dbscan(features):
     
     return best_params
 
-def cluster_dbscan(victims_list, labels):
+def make_clusters(victims_list, labels):
     clusters = []
 
     groups = defaultdict(list)
@@ -99,11 +99,14 @@ def cluster_dbscan(victims_list, labels):
             'sobr_std': float(sobr_std)
         })
 
+    return clusters
+
+def cluster_dbscan(clusters):
     print(f"\nCluster\t\tSobr (min)\tSobr (max)\tSobr (med)\tDesvio")
 
     # Write each cluster members to a file cluster_i.txt in the agent config folder
     for i, cl in enumerate(clusters):
-        print(f"Cluster {i}:\t{cl.get('sobr_min')}\t\t{cl.get('sobr_max')}\t\t{cl.get('sobr_mean'):.2f}\t\t{cl.get('sobr_std'):.2f}")
+        print(f"Cluster {i + 1}:\t{cl.get('sobr_min')}\t\t{cl.get('sobr_max')}\t\t{cl.get('sobr_mean'):.2f}\t\t{cl.get('sobr_std'):.2f}")
         fname = os.path.join(".", f"clusters/cluster_{i + 1}.txt")
         with open(fname, 'w') as fh:
             for seq in cl.get('members', []):
@@ -111,8 +114,6 @@ def cluster_dbscan(victims_list, labels):
     
     if clusters:
         print(f"Wrote {len(clusters)} cluster files to clusters/ directory")
-
-    return clusters
 
 def show_individual_points(features, labels, n_clusters):
     n_samples = features.shape[0]
@@ -235,16 +236,80 @@ def main(map_file):
     scaler = MinMaxScaler()
     features = scaler.fit_transform(features_raw)
 
+    # DBSCAN
     best_params = params_dbscan(features)
     labels = best_params['labels']
     best_params.pop('labels')
     print('\nBest params:', best_params)
 
-    clusters = cluster_dbscan(victims_list, labels)
+    clusters = make_clusters(victims_list, labels)
 
+    cluster_dbscan(clusters)
     show_individual_points(features, labels, best_params['n_clusters'])
     plot_dbscan(labels, clusters, coords)
 
+    # K-Means
+    MARGINAL_SSE = 1.0
+    last_sse = float('inf')
+    best_params = None
+
+    features = scaler.fit_transform(coords)
+
+    print("\n\n")
+
+    sse_values = []
+    k_values = range(2, 13)
+
+    for k in k_values:
+        kmeans = KMeans(
+            n_clusters=k,
+            random_state=21,
+            n_init=10
+        )
+
+        labels = kmeans.fit_predict(features)
+        s_score = silhouette_score(features, labels)
+        sse = kmeans.inertia_
+
+        sse_values.append(sse)
+
+        print(f"K={k:2d}\tSSE={sse:.4f}\tSilhouette={s_score:.4f}")
+
+        if best_params is None and last_sse - sse < MARGINAL_SSE:
+            best_params = {
+                'k': k,
+                's_score': s_score,
+                'sse': sse,
+                'labels': labels
+            }
+        
+        last_sse = sse
+
+    labels = best_params['labels']
+    best_params.pop('labels')
+    print('\nBest params:', best_params)
+
+    clusters = make_clusters(victims_list, labels)
+    print(f"\nCluster\t\tSobr (min)\tSobr (max)\tSobr (med)\tDesvio")
+    for i, cl in enumerate(clusters):
+        print(f"Cluster {i + 1}:\t{cl.get('sobr_min')}\t\t{cl.get('sobr_max')}\t\t{cl.get('sobr_mean'):.2f}\t\t{cl.get('sobr_std'):.2f}")
+
+    plt.figure(figsize=(8,5))
+
+    plt.plot(
+        k_values,
+        sse_values,
+        marker='o'
+    )
+
+    plt.xlabel("Number of Clusters (K)")
+    plt.ylabel("SSE")
+    plt.title("Elbow Method")
+    plt.grid(True)
+
+    plt.xticks(list(k_values))
+
+    plt.show()
 
 if __name__ == '__main__':
     print("------------------")
