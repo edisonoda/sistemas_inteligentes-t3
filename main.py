@@ -226,33 +226,12 @@ def plot_dbscan(labels, clusters, coords):
     plt.axis('equal')
     plt.show()
 
-def main(map_file):
-    victims_list = read_map(map_file)
-    coords = _np.array([[v[1], v[2]] for v in victims_list])
-    tris = _np.array([v[3] for v in victims_list]).reshape(-1, 1)
-
-    # Normalizes tri and coords
-    features_raw = _np.hstack([coords, tris])
-    scaler = MinMaxScaler()
-    features = scaler.fit_transform(features_raw)
-
-    # DBSCAN
-    best_params = params_dbscan(features)
-    labels = best_params['labels']
-    best_params.pop('labels')
-    print('\nBest params:', best_params)
-
-    clusters = make_clusters(victims_list, labels)
-
-    cluster_dbscan(clusters)
-    show_individual_points(features, labels, best_params['n_clusters'])
-    plot_dbscan(labels, clusters, coords)
-
-    # K-Means
+def calculate_kmeans(coords, victims_list):
     MARGINAL_SSE = 1.0
     last_sse = float('inf')
     best_params = None
 
+    scaler = MinMaxScaler()
     features = scaler.fit_transform(coords)
 
     print("\n\n")
@@ -310,6 +289,32 @@ def main(map_file):
     plt.xticks(list(k_values))
 
     plt.show()
+
+
+def main(map_file):
+    victims_list = read_map(map_file)
+    coords = _np.array([[v[1], v[2]] for v in victims_list])
+    tris = _np.array([v[3] for v in victims_list]).reshape(-1, 1)
+
+    # Normalizes tri and coords
+    features_raw = _np.hstack([coords, tris])
+    scaler = MinMaxScaler()
+    features = scaler.fit_transform(features_raw)
+
+    # DBSCAN
+    best_params = params_dbscan(features)
+    labels = best_params['labels']
+    best_params.pop('labels')
+    print('\nBest params:', best_params)
+
+    clusters = make_clusters(victims_list, labels)
+
+    cluster_dbscan(clusters)
+    show_individual_points(features, labels, best_params['n_clusters'])
+    plot_dbscan(labels, clusters, coords)
+
+    # K-Means
+    calculate_kmeans(coords, victims_list)
 
 if __name__ == '__main__':
     print("------------------")
