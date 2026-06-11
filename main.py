@@ -227,6 +227,7 @@ def plot_dbscan(labels, clusters, coords):
     plt.legend()
     plt.grid(True)
     plt.axis('equal')
+    plt.gca().invert_yaxis()
     plt.show()
 
 def calculate_kmeans(coords, victims_list):
