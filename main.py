@@ -10,11 +10,8 @@ from sklearn.metrics import silhouette_score, pairwise_distances
 
 import matplotlib.pyplot as plt
 
-def main(map_file):
+def read_map(map_file):
     victims_list = []
-    clusters = []
-    labels = []
-    best_params = None
 
     with open(map_file, 'r') as csvfile:
         csvreader = csv.reader(csvfile)
@@ -29,14 +26,11 @@ def main(map_file):
 
             if id != -1:
                 victims_list.append((id, x, y, tri, sobr))
+    
+    return victims_list
 
-    coords = _np.array([[v[1], v[2]] for v in victims_list])
-    tris = _np.array([v[3] for v in victims_list]).reshape(-1, 1)
-
-    # Normalizes tri and coords
-    features_raw = _np.hstack([coords, tris])
-    scaler = MinMaxScaler()
-    features = scaler.fit_transform(features_raw)
+def params_dbscan(features):
+    best_params = None
 
     parameters = [
         {'eps': 0.1, 'min_samples': 6},
@@ -69,11 +63,11 @@ def main(map_file):
                 'n_noise': n_noise,
                 'labels': labels
             }
+    
+    return best_params
 
-    labels = best_params['labels']
-    best_params.pop('labels')
-
-    print('\nBest params:', best_params)
+def cluster_dbscan(victims_list, labels):
+    clusters = []
 
     groups = defaultdict(list)
     for (v, x, y, tri, sobr), lbl in zip(victims_list, labels):
@@ -118,6 +112,57 @@ def main(map_file):
     if clusters:
         print(f"Wrote {len(clusters)} cluster files to clusters/ directory")
 
+    return clusters
+
+def show_individual_points(features, labels, n_clusters):
+    n_samples = features.shape[0]
+    dists = pairwise_distances(features, metric='euclidean')
+
+    a = _np.zeros(n_samples)
+    b = _np.zeros(n_samples)
+
+    for i in range(n_samples):
+        # Calcula a(i) - média das distâncias para outros pontos de dados no mesmo cluster
+        brothers = dists[i, labels == labels[i]]
+
+        if len(brothers) == 1:
+            a[i] = 0
+        else:
+            a[i] = _np.sum(brothers)/(len(brothers) - 1)
+
+        # Calcula b(i) - menor média das distâncias para pontos de dados em outros clusters
+        min_mean_dist = float('inf')
+        for k in range(n_clusters):
+            if k != labels[i]:
+                # distancia media para todos os individuos do cluster k
+                mean_dist = _np.mean(dists[i, labels == k])
+                if mean_dist < min_mean_dist:
+                    min_mean_dist = mean_dist
+
+        # número de clusters calculado pelo número de labels de clusters
+        b[i] = min_mean_dist
+
+    # Calcula os escores de silhueta para cada ponto de dados
+    silhouette_scores = (b - a) / _np.maximum(a, b)
+
+    # Print os coeficientes individuais de silhueta
+    print(f"\n(x, y, tri):\t\ta\t\tb\t\tsilhouette")
+    for i, txt in enumerate(features):
+        print(f"({features[i, 0]:.2f}, {features[i, 1]:.2f}, {features[i, 2]:.2f}):\ta = {a[i]:.2f}\tb = {b[i]:.2f}\ts = {silhouette_scores[i]:.3f}")
+
+    # Calcula a silhueta média
+    mean_silhouette = _np.mean(silhouette_scores)
+    print(f"\nEscore de silhueta média para {n_clusters + 1} clusters: {mean_silhouette:.4f}")
+    faixa_boa = _np.sum(silhouette_scores >= 0.7)
+    faixa_raz = _np.sum((silhouette_scores >= 0.25) & (silhouette_scores < 0.7))
+    faixa_ruim = _np.sum(silhouette_scores < 0.25)
+
+    print("\nDistribuição dos escores de silhueta:")
+    print(f"s(i) >= 0.7         (BOM)      : {faixa_boa}")
+    print(f"0.25 <= s(i) < 0.7  (RAZOÁVEL) : {faixa_raz}")
+    print(f"s(i) < 0.25         (RUIM)     : {faixa_ruim}")
+
+def plot_dbscan(labels, clusters, coords):
     # Plot victims colored by cluster
     plt.figure(figsize=(12, 12))
     plt.axis('equal')
@@ -179,54 +224,26 @@ def main(map_file):
     plt.grid(True)
     plt.axis('equal')
     plt.show()
-    
-    n_samples = features.shape[0]
-    n_clusters = best_params['n_clusters']
-    dists = pairwise_distances(features, metric='euclidean')
 
-    a = _np.zeros(n_samples)
-    b = _np.zeros(n_samples)
+def main(map_file):
+    victims_list = read_map(map_file)
+    coords = _np.array([[v[1], v[2]] for v in victims_list])
+    tris = _np.array([v[3] for v in victims_list]).reshape(-1, 1)
 
-    for i in range(n_samples):
-        # Calcula a(i) - média das distâncias para outros pontos de dados no mesmo cluster
-        brothers = dists[i, labels == labels[i]]
+    # Normalizes tri and coords
+    features_raw = _np.hstack([coords, tris])
+    scaler = MinMaxScaler()
+    features = scaler.fit_transform(features_raw)
 
-        if len(brothers) == 1:
-            a[i] = 0
-        else:
-            a[i] = _np.sum(brothers)/(len(brothers) - 1)
+    best_params = params_dbscan(features)
+    labels = best_params['labels']
+    best_params.pop('labels')
+    print('\nBest params:', best_params)
 
-        # Calcula b(i) - menor média das distâncias para pontos de dados em outros clusters
-        min_mean_dist = float('inf')
-        for k in range(n_clusters):
-            if k != labels[i]:
-                # distancia media para todos os individuos do cluster k
-                mean_dist = _np.mean(dists[i, labels == k])
-                if mean_dist < min_mean_dist:
-                    min_mean_dist = mean_dist
+    clusters = cluster_dbscan(victims_list, labels)
 
-        # número de clusters calculado pelo número de labels de clusters
-        b[i] = min_mean_dist
-
-    # Calcula os escores de silhueta para cada ponto de dados
-    silhouette_scores = (b - a) / _np.maximum(a, b)
-
-    # Print os coeficientes individuais de silhueta
-    print(f"\n(x, y, tri):\t\ta\t\tb\t\tsilhouette")
-    for i, txt in enumerate(features):
-        print(f"({features[i, 0]:.2f}, {features[i, 1]:.2f}, {features[i, 2]:.2f}):\ta = {a[i]:.2f}\tb = {b[i]:.2f}\ts = {silhouette_scores[i]:.3f}")
-
-    # Calcula a silhueta média
-    mean_silhouette = _np.mean(silhouette_scores)
-    print(f"\nEscore de silhueta média para {n_clusters + 1} clusters: {mean_silhouette:.4f}")
-    faixa_boa = _np.sum(silhouette_scores >= 0.7)
-    faixa_raz = _np.sum((silhouette_scores >= 0.25) & (silhouette_scores < 0.7))
-    faixa_ruim = _np.sum(silhouette_scores < 0.25)
-
-    print("\nDistribuição dos escores de silhueta:")
-    print(f"s(i) >= 0.7         (BOM)      : {faixa_boa}")
-    print(f"0.25 <= s(i) < 0.7  (RAZOÁVEL) : {faixa_raz}")
-    print(f"s(i) < 0.25         (RUIM)     : {faixa_ruim}")
+    show_individual_points(features, labels, best_params['n_clusters'])
+    plot_dbscan(labels, clusters, coords)
 
 
 if __name__ == '__main__':
