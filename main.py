@@ -96,8 +96,11 @@ def make_clusters(victims_list, labels):
             'sobr_min': float(sobr_min),
             'sobr_max': float(sobr_max),
             'sobr_mean': float(sobr_mean),
-            'sobr_std': float(sobr_std)
+            'sobr_std': float(sobr_std),
+            'priority': 0.4 * cluster_tri + 0.3 * (1 - sobr_mean) + 0.3 * len(members)
         })
+
+    clusters.sort(key=lambda c: c['priority'], reverse=True)
 
     return clusters
 
@@ -310,7 +313,7 @@ def main(map_file):
     clusters = make_clusters(victims_list, labels)
 
     cluster_dbscan(clusters)
-    show_individual_points(features, labels, best_params['n_clusters'])
+    # show_individual_points(features, labels, best_params['n_clusters'])
     plot_dbscan(labels, clusters, coords)
 
     # K-Means
